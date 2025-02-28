@@ -1,0 +1,138 @@
+# Source: pulsar/templates/pulsar-manager-cluster-initialize.yaml
+#
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "pulsar-mini-pulsar-manager-init"
+  namespace: pulsar
+  labels:
+    app: pulsar
+    chart: pulsar-3.9.0
+    release: pulsar-mini
+    heritage: Helm
+    cluster: pulsar-mini
+    component: pulsar-manager-init
+spec:
+  template:
+    spec:
+      
+      nodeSelector:
+      tolerations:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-pulsar-manager-ready
+          image: "apachepulsar/pulsar-all:4.0.2"
+          imagePullPolicy: "IfNotPresent"
+          resources: 
+            requests:
+              cpu: 0.1
+              memory: 256Mi
+          command: [ "sh", "-c" ]
+          args:
+            - |
+              ADMIN_URL=pulsar-mini-pulsar-manager-admin:7750
+              until $(curl -sS --fail -X GET http://${ADMIN_URL} > /dev/null 2>&1); do
+                  sleep 3;
+              done;
+        # This init container will wait for at least one broker to be ready before
+        # initializing the pulsar-manager
+        - name: wait-broker-ready
+          image: "apachepulsar/pulsar-all:4.0.2"
+          imagePullPolicy: "IfNotPresent"
+          resources: 
+            requests:
+              cpu: 0.1
+              memory: 256Mi
+          command: [ "sh", "-c" ]
+          args:
+            - >-
+              set -e;
+              brokerServiceNumber="$(nslookup -timeout=10 pulsar-mini-broker | grep Name | wc -l)";
+              until [ ${brokerServiceNumber} -ge 1 ]; do
+                echo "pulsar cluster pulsar-mini isn't initialized yet ... check in 10 seconds ...";
+                sleep 10;
+                brokerServiceNumber="$(nslookup -timeout=10 pulsar-mini-broker | grep Name | wc -l)";
+              done;
+      containers:
+        - name: "pulsar-mini-pulsar-manager-init"
+          image: "apachepulsar/pulsar-all:4.0.2"
+          imagePullPolicy: "IfNotPresent"
+          command: [ "sh", "-c" ]
+          args:
+            - |
+              cd /tmp
+              ADMIN_URL=pulsar-mini-pulsar-manager-admin:7750
+              CSRF_TOKEN=$(curl http://${ADMIN_URL}/pulsar-manager/csrf-token)
+              UI_URL=pulsar-mini-pulsar-manager:9527
+
+              
+              LOGIN_REPLY=$(curl -v \
+                -X POST http://${UI_URL}/pulsar-manager/login \
+                -H 'Accept: application/json, text/plain, */*' \
+                -H 'Content-Type: application/json' \
+                -H "X-XSRF-TOKEN: $CSRF_TOKEN" \
+                -H "Cookie: XSRF-TOKEN=$CSRF_TOKEN" \
+                -sS -D headers.txt \
+                -d '{"username": "'${USERNAME}'", "password": "'${PASSWORD}'"}')
+              echo "$LOGIN_REPLY"
+
+              if [ -n "$(echo "$LOGIN_REPLY" | grep 'success')" ]; then
+                echo "account already exists"
+              else
+                echo "creating account"
+                
+                curl -v \
+                  -X PUT http://${ADMIN_URL}/pulsar-manager/users/superuser \
+                  -H "X-XSRF-TOKEN: $CSRF_TOKEN" \
+                  -H "Cookie: XSRF-TOKEN=$CSRF_TOKEN;" \
+                  -H 'Content-Type: application/json' \
+                  -d '{"name": "'"${USERNAME}"'", "password": "'"${PASSWORD}"'", "description": "Helm-managed Admin Account", "email": "'"${USERNAME}"'@pulsar.org"}'
+                
+                LOGIN_REPLY=$(curl -v \
+                  -X POST http://${UI_URL}/pulsar-manager/login \
+                  -H 'Accept: application/json, text/plain, */*' \
+                  -H 'Content-Type: application/json' \
+                  -H "X-XSRF-TOKEN: $CSRF_TOKEN" \
+                  -H "Cookie: XSRF-TOKEN=$CSRF_TOKEN" \
+                  -sS -D headers.txt \
+                  -d '{"username": "'${USERNAME}'", "password": "'${PASSWORD}'"}')
+                echo "$LOGIN_REPLY"
+              fi
+              LOGIN_TOKEN=$(grep "token:" headers.txt | sed 's/^.*: //')
+              LOGIN_JSESSSIONID=$(grep -o "JSESSIONID=[a-zA-Z0-9_]*" headers.txt | sed 's/^.*=//')
+
+              
+              BROKER_URL="http://pulsar-mini-broker:8080"
+              BOOKIE_URL="http://pulsar-mini-bookie:8000"
+              echo '{ "name": "pulsar-mini", "broker": "'$BROKER_URL'", "bookie": "'$BOOKIE_URL'"}'
+
+              ENVIRONMENT_REPLY=$(curl -v \
+                -X PUT http://${UI_URL}/pulsar-manager/environments/environment \
+                -H 'Content-Type: application/json' \
+                -H "token: $LOGIN_TOKEN" \
+                -H "X-XSRF-TOKEN: $CSRF_TOKEN" \
+                -H "username: $USERNAME" \
+                -H "Cookie: XSRF-TOKEN=$CSRF_TOKEN; JSESSIONID=$LOGIN_JSESSSIONID;" \
+                -d '{ "name": "pulsar-mini", "broker": "'$BROKER_URL'", "bookie": "'$BOOKIE_URL'"}')
+              echo "$ENVIRONMENT_REPLY"
+
+              if [ -n "$(echo "$ENVIRONMENT_REPLY" | grep -e 'success' -e 'exist')" ]; then
+                echo "Successfully created / found existing environment"
+                exit 0
+              else
+                echo "Error creating environment"
+                exit 1
+              fi
+          env:
+            - name: USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: "pulsar-mini-pulsar-manager-secret"
+                  key: UI_USERNAME
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: "pulsar-mini-pulsar-manager-secret"
+                  key: UI_PASSWORD
+---
+

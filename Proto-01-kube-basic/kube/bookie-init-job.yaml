@@ -1,0 +1,60 @@
+## Source: pulsar/templates/bookkeeper-cluster-initialize.yaml
+#
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "pulsar-mini-bookie-init"
+  namespace: pulsar
+  labels:
+    app: pulsar
+    chart: pulsar-3.9.0
+    release: pulsar-mini
+    heritage: Helm
+    cluster: pulsar-mini
+    component: "bookie-init"
+spec:
+# This feature was previously behind a feature gate for several Kubernetes versions and will default to true in 1.23 and beyond
+# https://kubernetes.io/docs/reference/command-line-tools-reference/feature-gates/
+  template:
+    spec:
+      
+      serviceAccountName: "pulsar-mini-bookie"
+      initContainers:
+      - name: wait-zookeeper-ready
+        image: "apachepulsar/pulsar-all:4.0.2"
+        imagePullPolicy: "IfNotPresent"
+        resources: 
+          requests:
+            cpu: 0.1
+            memory: 256Mi
+        command: ["timeout", "600", "sh", "-c"]
+        args:
+          - >-
+            until nslookup pulsar-mini-zookeeper-0.pulsar-mini-zookeeper.pulsar; do
+              sleep 3;
+            done;
+      containers:
+      - name: "pulsar-mini-bookie-init"
+        image: "apachepulsar/pulsar-all:4.0.2"
+        imagePullPolicy: "IfNotPresent"
+        command: ["timeout", "60", "sh", "-c"]
+        args:
+          - >
+            bin/apply-config-from-env.py conf/bookkeeper.conf;
+            
+            export BOOKIE_MEM="-Xmx128M";
+            if timeout 15 bin/bookkeeper shell whatisinstanceid; then
+                echo "bookkeeper cluster already initialized";
+            else
+                bin/bookkeeper shell initnewcluster;
+            fi
+        envFrom:
+        - configMapRef:
+            name: "pulsar-mini-bookie"
+        volumeMounts:
+        
+      volumes:
+      
+      restartPolicy: OnFailure
+---
+

@@ -1,0 +1,118 @@
+# Source: pulsar/templates/bookkeeper-statefulset.yaml
+#
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: "pulsar-mini-bookie"
+  namespace: pulsar
+  labels:
+    app: pulsar
+    chart: pulsar-3.9.0
+    release: pulsar-mini
+    heritage: Helm
+    cluster: pulsar-mini
+    component: bookie
+spec:
+  serviceName: "pulsar-mini-bookie"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pulsar
+      release: pulsar-mini
+      component: bookie
+  updateStrategy:
+    type: RollingUpdate
+#  podManagementPolicy: Parallel
+  template:
+    metadata:
+      labels:
+        app: pulsar
+        release: pulsar-mini
+        cluster: pulsar-mini
+        component: bookie
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+#      affinity:
+      terminationGracePeriodSeconds: 30
+      serviceAccountName: "pulsar-mini-bookie"
+      securityContext:
+        fsGroup: 0
+        fsGroupChangePolicy: OnRootMismatch
+#      initContainers:
+      # This initContainer will wait for bookkeeper initnewcluster to complete
+      # before deploying the bookies
+#      - name: pulsar-bookkeeper-verify-clusterid
+#        image: "apachepulsar/pulsar-all:4.0.2"
+#        imagePullPolicy: "IfNotPresent"
+#        resources: 
+#          requests:
+#            cpu: 0.1
+#            memory: 256Mi
+#        command: ["timeout", "600", "sh", "-c"]
+#        args:
+#        # only reformat bookie if bookkeeper is running without persistence
+#        - >
+#          
+#          bin/apply-config-from-env.py conf/bookkeeper.conf;
+#          export BOOKIE_MEM="-Xmx128M";until timeout 15 bin/bookkeeper shell whatisinstanceid; do
+#            sleep 3;
+#          done;
+#          bin/bookkeeper shell bookieformat -nonInteractive -force -deleteCookie || true
+#        envFrom:
+#        - configMapRef:
+#            name: "pulsar-mini-bookie"
+#        volumeMounts:
+        
+      containers:
+      - name: "pulsar-mini-bookie"
+        image: "apachepulsar/pulsar-all:4.0.2"
+        imagePullPolicy: "IfNotPresent"
+#        livenessProbe:
+#          httpGet:
+#            path: /api/v1/bookie/state
+#            port: 8000
+#          initialDelaySeconds: 10
+#          periodSeconds: 30
+#          timeoutSeconds: 5
+#          failureThreshold: 60
+#        readinessProbe:
+#          httpGet:
+#            path: /api/v1/bookie/is_ready
+#            port: 8000
+#          initialDelaySeconds: 10
+#          periodSeconds: 30
+#          timeoutSeconds: 5
+#          failureThreshold: 60
+#        resources:
+#          requests:
+#            cpu: 0.2
+#            memory: 512Mi
+        command: ["sh", "-c"]
+        args:
+        - >
+          bin/apply-config-from-env.py conf/bookkeeper.conf;
+          
+          OPTS="${OPTS} -Dlog4j2.formatMsgNoLookups=true" exec bin/pulsar bookie;
+        ports:
+        - name: "bookie"
+          containerPort: 3181
+        - name: http
+          containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: "pulsar-mini-bookie"
+        volumeMounts:
+        - name: "pulsar-mini-bookie-journal"
+          mountPath: /pulsar/data/bookkeeper/journal
+        - name: "pulsar-mini-bookie-ledgers"
+          mountPath: /pulsar/data/bookkeeper/ledgers
+        
+      volumes:
+      - name: "pulsar-mini-bookie-journal"
+        emptyDir: {}
+      - name: "pulsar-mini-bookie-ledgers"
+        emptyDir: {}
+---
+

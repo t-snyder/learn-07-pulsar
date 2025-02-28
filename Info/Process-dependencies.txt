@@ -1,0 +1,40 @@
+
+
+Pulsar config job     requires  zookeeper                      
+            export PULSAR_MEM="-Xmx128M";
+            bin/pulsar initialize-cluster-metadata \
+              --cluster pulsar-mini \
+              --zookeeper pulsar-mini-zookeeper:2181 \
+              --configuration-store pulsar-mini-zookeeper:2181 \
+              --web-service-url http://pulsar-mini-broker.pulsar.svc.cluster.local:8080/ \
+              --web-service-url-tls https://pulsar-mini-broker.pulsar.svc.cluster.local:8443/ \
+              --broker-service-url pulsar://pulsar-mini-broker.pulsar.svc.cluster.local:6650/ \
+              --broker-service-url-tls pulsar+ssl://pulsar-mini-broker.pulsar.svc.cluster.local:6651/ ;
+
+
+Bookie init job      requires  zookeeper                  
+            bin/apply-config-from-env.py conf/bookkeeper.conf;
+            bin/bookkeeper shell initnewcluster;
+                                                           
+Bookie statefulset   
+#        # only reformat bookie if bookkeeper is running without persistence
+#        - >
+#          
+#          bin/apply-config-from-env.py conf/bookkeeper.conf;
+#          export BOOKIE_MEM="-Xmx128M";
+#          until timeout 15 bin/bookkeeper shell whatisinstanceid; do
+#            sleep 3;
+#          done;
+#          bin/bookkeeper shell bookieformat -nonInteractive -force -deleteCookie || true
+ 
+Broker statefulset    requires zookeeper   bookie
+
+Proxy statefulset     requires zookeeper   broker
+
+
+Deployment Order
+1. zookeeper
+2. Bookie
+3. Broker
+4. Proxy
+5. Manager (Optional)

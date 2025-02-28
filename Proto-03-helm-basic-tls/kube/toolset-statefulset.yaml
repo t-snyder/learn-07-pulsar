@@ -1,0 +1,112 @@
+# Source: pulsar/templates/toolset-statefulset.yaml
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: "pulsar-mini-toolset"
+  namespace: pulsar
+  labels:
+    app: pulsar
+    chart: pulsar-3.9.0
+    release: pulsar-mini
+    heritage: Helm
+    cluster: pulsar-mini
+    component: toolset
+spec:
+  serviceName: "pulsar-mini-toolset"
+  replicas: 1
+  updateStrategy:
+    type: RollingUpdate
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: pulsar
+      release: pulsar-mini
+      component: toolset
+  template:
+    metadata:
+      labels:
+        app: pulsar
+        release: pulsar-mini
+        cluster: pulsar-mini
+        component: toolset
+      annotations:
+    spec:
+      terminationGracePeriodSeconds: 30
+      serviceAccountName: "pulsar-mini-toolset"
+      containers:
+      - name: "pulsar-mini-toolset"
+        image: "apachepulsar/pulsar-all:4.0.2"
+        imagePullPolicy: "IfNotPresent"
+        resources:
+          requests:
+            cpu: 0.1
+            memory: 256Mi
+        command: ["sh", "-c"]
+        args:
+        - >
+          bin/apply-config-from-env.py conf/client.conf;
+          bin/apply-config-from-env.py conf/bookkeeper.conf;
+          /pulsar/keytool/keytool.sh toolset ${HOSTNAME}.pulsar-mini-toolset.pulsar.svc.cluster.local true;
+          sleep 10000000000
+        envFrom:
+        - configMapRef:
+            name: "pulsar-mini-toolset"
+        volumeMounts:
+        - mountPath: "/pulsar/certs/proxy-ca"
+          name: proxy-ca
+          readOnly: true
+        - name: toolset-certs
+          mountPath: "/pulsar/certs/toolset"
+          readOnly: true
+        - name: ca
+          mountPath: "/pulsar/certs/ca"
+          readOnly: true
+        - name: keytool
+          mountPath: "/pulsar/keytool/keytool.sh"
+          subPath: keytool.sh
+      
+      volumes:
+      - name: proxy-ca
+        secret:
+          secretName: "pulsar-mini-ca-tls"
+          items:
+          - key: ca.crt
+            path: ca.crt
+      - name: toolset-certs
+        secret:
+          secretName: "pulsar-mini-tls-toolset"
+          items:
+          - key: tls.crt
+            path: tls.crt
+          - key: tls.key
+            path: tls.key
+      - name: ca
+        secret:
+          secretName: "pulsar-mini-ca-tls"
+          items:
+          - key: ca.crt
+            path: ca.crt
+      - name: keytool
+        configMap:
+          name: "pulsar-mini-keytool-configmap"
+          defaultMode: 0755
+---
+

@@ -1,0 +1,38 @@
+# Source: pulsar/templates/bookkeeper-podmonitor.yaml
+#
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: pulsar-mini-bookie
+  labels:
+    app: pulsar
+    chart: pulsar-3.9.0
+    release: pulsar-mini
+    heritage: Helm
+spec:
+  jobLabel: bookie
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      scheme: http
+      interval: 60s
+      scrapeTimeout: 60s
+      relabelings:
+        - action: labelmap
+          regex: __meta_kubernetes_pod_label_(.+)
+        - sourceLabels: [__meta_kubernetes_namespace]
+          action: replace
+          targetLabel: kubernetes_namespace
+        - sourceLabels: [__meta_kubernetes_pod_label_component]
+          action: replace
+          targetLabel: job
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          action: replace
+          targetLabel: kubernetes_pod_name
+  selector:
+    matchLabels:
+      app: pulsar
+      release: pulsar-mini
+      component: bookie
+---
+

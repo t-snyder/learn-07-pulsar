@@ -1,0 +1,2 @@
+Kubernetes deployment for pulsar zookeeper, bookie, broker, proxy and toolset. Configured
+to use tls encryption for proxy and broker access. 

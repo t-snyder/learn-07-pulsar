@@ -1,0 +1,65 @@
+# Source: pulsar/templates/pulsar-manager-statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: "pulsar-mini-pulsar-manager"
+  namespace: pulsar
+  labels:
+    app: pulsar
+    chart: pulsar-3.9.0
+    release: pulsar-mini
+    heritage: Helm
+    cluster: pulsar-mini
+    component: pulsar-manager
+spec:
+  serviceName: "pulsar-mini-pulsar-manager"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pulsar
+      release: pulsar-mini
+      component: pulsar-manager
+  template:
+    metadata:
+      labels:
+        app: pulsar
+        release: pulsar-mini
+        cluster: pulsar-mini
+        component: pulsar-manager
+      annotations:
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: "pulsar-mini-pulsar-manager"
+          image: "apachepulsar/pulsar-manager:v0.4.0"
+          imagePullPolicy: "IfNotPresent"
+          resources:
+            requests:
+              cpu: 0.1
+              memory: 250Mi
+          ports:
+          - containerPort: 9527
+          - containerPort: 7750
+          volumeMounts:
+          - name: "pulsar-mini-pulsar-manager-data"
+            mountPath: /data
+          envFrom:
+          - configMapRef:
+              name: "pulsar-mini-pulsar-manager"
+          env:
+          - name: USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: "pulsar-mini-pulsar-manager-secret"
+                key: DB_USERNAME
+          - name: PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: "pulsar-mini-pulsar-manager-secret"
+                key: DB_PASSWORD
+      
+      volumes:
+        - name: "pulsar-mini-pulsar-manager-data"
+          emptyDir: {}
+---
+

@@ -1,0 +1,55 @@
+# Source: pulsar/templates/pulsar-manager-service.yaml
+#
+apiVersion: v1
+kind: Service
+metadata:
+  name: "pulsar-mini-pulsar-manager"
+  namespace: pulsar
+  labels:
+    app: pulsar
+    chart: pulsar-3.9.0
+    release: pulsar-mini
+    heritage: Helm
+    cluster: pulsar-mini
+    component: pulsar-manager
+  annotations:
+    {}
+spec:
+  type: ClusterIP
+  ports:
+    - name: server
+      port: 9527
+      targetPort: 9527
+      protocol: TCP
+  selector:
+    app: pulsar
+    release: pulsar-mini
+    component: pulsar-manager
+---
+# Source: pulsar/templates/pulsar-manager-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: "pulsar-mini-pulsar-manager-admin"
+  namespace: pulsar
+  labels:
+    app: pulsar
+    chart: pulsar-3.9.0
+    release: pulsar-mini
+    heritage: Helm
+    cluster: pulsar-mini
+    component: pulsar-manager
+  annotations:
+    {}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 7750
+      targetPort: 7750
+      protocol: TCP
+  selector:
+    app: pulsar
+    release: pulsar-mini
+    component: pulsar-manager
+---
+
